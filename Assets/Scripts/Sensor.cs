@@ -1,30 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class Sensor : MonoBehaviour
 {
 	public float SensorRadius = 20;
-	public float DecayTime = 5;
-	public List<SensedThing> SensedThings = new List<SensedThing>();
-
-	public List<SensedThing> Enemies { get { return SensedThings.Where(x => x.Transform != null && IsEnemy(x)).ToList(); } }
-	public List<SensedThing> Allies { get { return SensedThings.Where(x => x.Transform != null && IsAlly(x)).ToList(); } }
-
-	public SensedThing ClosestEnemy
-	{
-		get
-		{
-			return Enemies.OrderBy(x => Vector3.Distance(transform.position, x.Transform.position)).FirstOrDefault();
-		}
-	}
 
 	private Vehicle vehicle;
+	private Blackboard blackboard;
 
 	public void Start()
 	{
 		vehicle = GetComponent<Vehicle>();
+		blackboard = GetComponent<Blackboard>();
 	}
 
 	private void Update()
@@ -35,83 +21,51 @@ public class Sensor : MonoBehaviour
 		{
 			var seenVehicle = collider.GetComponent<Vehicle>();
 
-			if (seenVehicle == null || seenVehicle == vehicle)
+			if (seenVehicle != null)
 			{
-				continue;
-			}
-
-			var exist = SensedThings.FirstOrDefault(x => x.Transform == seenVehicle.transform);
-			if (exist == null)
-			{
-				SensedThings.Add(new SensedThing
+				if (seenVehicle == vehicle)
 				{
-					Transform = seenVehicle.transform,
-					DecayTime = Time.time + DecayTime
-				});
+					// it's-a me
+					return;
+				}
+
+				if (seenVehicle.Faction == vehicle.Faction)
+				{
+					blackboard.Write("ally", seenVehicle.transform, Time.time + 5);
+				}
+				else
+				{
+					blackboard.Write("enemy", seenVehicle.transform, Time.time + 5);
+				}
 			}
-			else
+
+			var seenRepairStation = collider.GetComponent<RepairStation>();
+
+			if (seenRepairStation != null)
 			{
-				exist.DecayTime = Time.time + DecayTime;
-			}
-		}
-
-		for (int i = 0; i < Enemies.Count; i++)
-		{
-			var enemy = Enemies[i];
-
-			if (enemy.DecayTime < Time.time)
-			{
-				Enemies.Remove(enemy);
-			}
-		}
-
-		for (int i = 0; i < Allies.Count; i++)
-		{
-			var enemy = Allies[i];
-
-			if (enemy.DecayTime < Time.time)
-			{
-				Allies.Remove(enemy);
+				blackboard.Write("repair station", seenRepairStation.transform, Time.time + 60);
 			}
 		}
 	}
 
 	private void OnDrawGizmos()
 	{
-		Gizmos.color = Color.yellow;
-		foreach (var enemy in Enemies)
-		{
-			if (enemy.Transform != null)
-			{
-				Gizmos.DrawLine(transform.position, enemy.Transform.position);
-			}
-		}
-		Gizmos.color = Color.green;
-		foreach (var enemy in Allies)
-		{
-			if (enemy.Transform != null)
-			{
-				Gizmos.DrawLine(transform.position, enemy.Transform.position);
-			}
-		}
-		Gizmos.color = Color.white;
+		//Gizmos.color = Color.yellow;
+		//foreach (var enemy in blackboard.Get("enemy"))
+		//{
+		//	if (enemy.Transform != null)
+		//	{
+		//		Gizmos.DrawLine(transform.position, enemy.Transform.position);
+		//	}
+		//}
+		//Gizmos.color = Color.green;
+		//foreach (var enemy in Allies)
+		//{
+		//	if (enemy.Transform != null)
+		//	{
+		//		Gizmos.DrawLine(transform.position, enemy.Transform.position);
+		//	}
+		//}
+		//Gizmos.color = Color.white;
 	}
-
-	private bool IsEnemy(SensedThing x)
-	{
-		var other = x.Transform.GetComponent<Vehicle>();
-		return other != null && other.Faction != vehicle.Faction;
-	}
-
-	private bool IsAlly(SensedThing x)
-	{
-		var other = x.Transform.GetComponent<Vehicle>();
-		return other != null && other.Faction == vehicle.Faction;
-	}
-}
-
-public class SensedThing
-{
-	public Transform Transform;
-	public float DecayTime;
 }

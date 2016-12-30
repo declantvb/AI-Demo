@@ -31,10 +31,12 @@ public class MouseController : MonoBehaviour
 				}
 				else
 				{
+					var point = hit.point;
+					point.y = 0;
 					Fireteam.UpdateOrder(new FireteamOrder
 					{
 						Type = FireteamOrder.Types.Scout,
-						Target = hit.point,
+						Target = point,
 						IsDone = () => Vector3.Distance(Fireteam.AveragePosition, hit.point) < 10f
 					});
 				}

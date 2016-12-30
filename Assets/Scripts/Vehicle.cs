@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -12,12 +11,15 @@ public class Vehicle : MonoBehaviour
 
 	public VehicleOrder currentOrder;
 
+	private Blackboard blackboard;
 	private Mover mover;
 	private Shooter shooter;
 	private Sensor sensor;
+	private bool distracted;
 
 	private void Start()
 	{
+		blackboard = GetComponent<Blackboard>();
 		mover = GetComponent<Mover>();
 		shooter = GetComponent<Shooter>();
 		sensor = GetComponent<Sensor>();
@@ -25,19 +27,28 @@ public class Vehicle : MonoBehaviour
 
 	private void Update()
 	{
-		if (shooter.AttackOnSight && 
-			sensor.ClosestEnemy != null && 
-			sensor.ClosestEnemy.Transform != null && 
-			Vector3.Distance(transform.position, sensor.ClosestEnemy.Transform.position) < AutoAttackRange)
+		var closestEnemy = ClosestEnemy();
+		if (shooter.AttackOnSight &&
+			closestEnemy != null &&
+			Vector3.Distance(transform.position, closestEnemy.transform.position) < AutoAttackRange)
 		{
 			//todo detect already distracted
 
 			DoOrder(new VehicleOrder
 			{
 				Type = VehicleOrder.Types.Attack,
-				Target = sensor.ClosestEnemy.Transform.position,
-				IsDone = x => sensor.ClosestEnemy.Transform == null
+				Target = closestEnemy.transform.position,
+				IsDone = x => closestEnemy == null
 			});
+
+			distracted = true;
+		}
+		else if (distracted && currentOrder != null)
+		{
+			// get back on track
+
+			DoOrder(currentOrder);
+			distracted = false;
 		}
 
 		// update order
@@ -50,18 +61,26 @@ public class Vehicle : MonoBehaviour
 		// update Fireteam
 		if (Fireteam != null)
 		{
-			foreach (var enemy in sensor.Enemies)
+			var fireteamBlackboard = Fireteam.GetComponent<Blackboard>();
+			foreach (var enemy in blackboard.Read("enemy"))
 			{
-				Fireteam.blackboard.Store(Blackboard.Keys.Enemy, enemy.Transform, Time.time + Fireteam.blackboard.ExpiryTime);
-			} 
+				fireteamBlackboard.Write(enemy);
+			}
 		}
 	}
 
-	public List<Vehicle> EnemiesWithin(float distance)
+	public Transform ClosestEnemy()
 	{
-		return sensor.Enemies
-			.Select(x => x.Transform.GetComponent<Vehicle>())
-			.Where(x => x.transform != null && Vector3.Distance(transform.position, x.transform.position) < distance)
+		return blackboard.Read<Transform>("enemy")
+			.Where(x => x != null)
+			.OrderBy(x => Vector3.Distance(transform.position, x.position))
+			.FirstOrDefault();
+	}
+
+	public List<Transform> EnemiesWithin(float distance)
+	{
+		return blackboard.Read<Transform>("enemy")
+			.Where(x => x != null && Vector3.Distance(transform.position, x.position) < distance)
 			.ToList();
 	}
 
@@ -77,7 +96,7 @@ public class Vehicle : MonoBehaviour
 		switch (order.Type)
 		{
 			case VehicleOrder.Types.Attack:
-				Move(order.Target, attack: true, range : shooter.Range);
+				Move(order.Target, attack: true, range: shooter.Range);
 				break;
 
 			case VehicleOrder.Types.Move:
@@ -105,17 +124,17 @@ public class Vehicle : MonoBehaviour
 		if (attack.HasValue && attack.Value)
 		{
 			float closestDistance = float.MaxValue;
-			foreach (var enemy in sensor.Enemies)
+			foreach (var enemy in blackboard.Read<Transform>("enemy"))
 			{
-				if (enemy.Transform == null || this == null)
+				if (enemy == null || this == null)
 				{
 					continue;
 				}
 
-				var dist = Vector3.Distance(transform.position, enemy.Transform.position);
+				var dist = Vector3.Distance(transform.position, enemy.position);
 				if (dist < closestDistance)
 				{
-					closestToTarget = enemy.Transform;
+					closestToTarget = enemy;
 					closestDistance = dist;
 				}
 			}

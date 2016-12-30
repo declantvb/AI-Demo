@@ -1,7 +1,8 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
-public class Fireteam : MonoBehaviour
+public class Fireteam : MonoBehaviour, IGoap
 {
 	public float MaxScoutDistance;
 	public float MaxActionDistance;
@@ -11,61 +12,77 @@ public class Fireteam : MonoBehaviour
 	public float WanderWaitTimeMin;
 	public float WanderWaitTimeMax;
 
-	public Blackboard blackboard = new Blackboard();
+	//temp
+	public bool Defend;
+
+	private Blackboard blackboard;
 	public Vehicle[] Members;
 
 	public Vector3 AveragePosition
 	{
 		get
 		{
-			return Members
-				.Where(x => x != null)
+			var nonNull = Members
+				.Where(x => x != null);
+
+			if (!nonNull.Any())
+			{
+				return Vector3.zero;
+			}
+
+			return nonNull
 				.Select(x => x.transform.position)
-				.Aggregate((acc, val) => acc + val) / Members.Length;
+				.Aggregate((acc, val) => acc + val) / nonNull.Count();
 		}
 	}
 
 	private FireteamOrder currentOrder;
-	private bool attacking;
+	private bool attacking = false;
+	private bool moving = false;
 
 	private void Start()
 	{
+		blackboard = GetComponent<Blackboard>();
+
 		foreach (var member in Members)
 		{
 			member.Fireteam = this;
 		}
+
+		//add goap actions
+		gameObject.AddComponent<ExploreAction>();
+		gameObject.AddComponent<DefendAction>();
 	}
 
 	private void Update()
 	{
-		blackboard.Update(Time.time);
-
 		if (Members.All(x => x == null))
 		{
 			return;
 		}
 
-		var enemies = blackboard.Get(Blackboard.Keys.Enemy);
-		if (enemies.Any())
-		{
-			var closest = enemies.Select(x => x.Data as Transform).OrderBy(x => x == null ? float.MaxValue : Vector3.Distance(AveragePosition, x.position)).FirstOrDefault();
+		// attack closest
+		//var enemies = blackboard.Get(Blackboard.Keys.Enemy);
+		//if (enemies.Any())
+		//{
+		//	var closest = enemies.Select(x => x.Data as Transform).OrderBy(x => x == null ? float.MaxValue : Vector3.Distance(AveragePosition, x.position)).FirstOrDefault();
 
-			if (closest != null)
-			{
-				DoOrder(new FireteamOrder
-				{
-					Type = FireteamOrder.Types.Assault,
-					Target = closest.position,
-					IsDone = () => closest == null
-				});
+		//	if (closest != null)
+		//	{
+		//		DoOrder(new FireteamOrder
+		//		{
+		//			Type = FireteamOrder.Types.Assault,
+		//			Target = closest.position,
+		//			IsDone = () => closest == null
+		//		});
 
-				attacking = true;
-			}
-		}
-		else
-		{
-			attacking = false;
-		}
+		//		attacking = true;
+		//	}
+		//}
+		//else
+		//{
+		//	attacking = false;
+		//}
 
 		// update order
 		if (currentOrder != null && currentOrder.IsDone())
@@ -73,33 +90,33 @@ public class Fireteam : MonoBehaviour
 			currentOrder = null;
 		}
 
-		if (currentOrder == null && !attacking)
-		{
-			//wander around current area
-			var pos = AveragePosition;
+		//wander around current area
+		//if (currentOrder == null && !attacking)
+		//{
+		//	var pos = AveragePosition;
 
-			var fullCircle = Mathf.PI * 2;
+		//	var fullCircle = Mathf.PI * 2;
 
-			var angleBetween = fullCircle / Members.Length;
-			var i = 0;
-			foreach (var member in Members)
-			{
-				if (member.currentOrder == null || member.currentOrder.Type != VehicleOrder.Types.Wander)
-				{
-					var offset = Quaternion.AngleAxis(angleBetween * i * Mathf.Rad2Deg, Vector3.up) * Vector3.forward * WanderDistance;
-					var rand = Random.insideUnitCircle * WanderError;
-					var waitTime = Time.time + Random.value * (WanderWaitTimeMax - WanderWaitTimeMin) + WanderWaitTimeMin;
-					member.UpdateOrder(new VehicleOrder
-					{
-						Type = VehicleOrder.Types.Wander,
-						Target = pos + offset + new Vector3(rand.x, 0, rand.y),
-						IsDone = x => Time.time > waitTime
-					});
-				}
+		//	var angleBetween = fullCircle / Members.Length;
+		//	var i = 0;
+		//	foreach (var member in Members)
+		//	{
+		//		if (member.currentOrder == null || member.currentOrder.Type != VehicleOrder.Types.Wander)
+		//		{
+		//			var offset = Quaternion.AngleAxis(angleBetween * i * Mathf.Rad2Deg, Vector3.up) * Vector3.forward * WanderDistance;
+		//			var rand = UnityEngine.Random.insideUnitCircle * WanderError;
+		//			var waitTime = Time.time + UnityEngine.Random.value * (WanderWaitTimeMax - WanderWaitTimeMin) + WanderWaitTimeMin;
+		//			member.UpdateOrder(new VehicleOrder
+		//			{
+		//				Type = VehicleOrder.Types.Wander,
+		//				Target = pos + offset + new Vector3(rand.x, 0, rand.y),
+		//				IsDone = x => Time.time > waitTime
+		//			});
+		//		}
 
-				i++;
-			}
-		}
+		//		i++;
+		//	}
+		//}
 	}
 
 	public void UpdateOrder(FireteamOrder order)
@@ -153,4 +170,97 @@ public class Fireteam : MonoBehaviour
 			}
 		}
 	}
+
+	#region IGoap members
+
+	public HashSet<KeyValuePair<string, object>> getWorldState()
+	{
+		return new HashSet<KeyValuePair<string, object>>
+		{
+			new KeyValuePair<string, object>(GoapKeys.ShouldDefend, Defend)
+		};
+	}
+
+	public HashSet<KeyValuePair<string, object>> createGoalState()
+	{
+		var ret = new HashSet<KeyValuePair<string, object>> { };
+		if (Defend)
+		{
+			ret.Add(new KeyValuePair<string, object>(GoapKeys.Defending, true));
+		}
+
+		return ret;
+	}
+
+	public void planFailed(HashSet<KeyValuePair<string, object>> failedGoal)
+	{
+		Debug.LogWarning("plan failed");
+	}
+
+	public void planFound(HashSet<KeyValuePair<string, object>> goal, Queue<GoapAction> actions)
+	{
+		Debug.Log("plan found");
+	}
+
+	public void actionsFinished()
+	{
+		goapReset();
+		Debug.Log("plan finished");
+	}
+
+	public void planAborted(GoapAction aborter)
+	{
+		goapReset();
+		Debug.LogWarning("plan aborted");
+	}
+
+	public bool moveAgent(GoapAction nextAction)
+	{
+		Vector3 targetPos;
+		if (nextAction.target != null)
+		{
+			targetPos = nextAction.target.transform.position;
+		}
+		else if (nextAction.targetPosition.HasValue)
+		{
+			targetPos = nextAction.targetPosition.Value;
+		}
+		else
+		{
+			Debug.LogError("goap move with no target");
+			return true;
+		}
+
+		if (!moving)
+		{
+			var memberOrder = new VehicleOrder
+			{
+				Type = VehicleOrder.Types.Move,
+				Target = targetPos,
+				IsDone = x => Vector3.Distance(x.transform.position, targetPos) < MaxScoutDistance
+			};
+
+			foreach (var member in Members)
+			{
+				member.UpdateOrder(memberOrder);
+			}
+
+			moving = true;
+		}
+		else if (Vector3.Distance(AveragePosition, targetPos) < MaxActionDistance)
+		{
+			goapReset();
+			nextAction.setInRange(true);
+			return true;
+		}
+
+		return false;
+	}
+
+	private void goapReset()
+	{
+		moving = false;
+	}
+
+	#endregion IGoap members
 }

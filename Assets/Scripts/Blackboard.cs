@@ -1,12 +1,12 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
-public class Blackboard
+public class Blackboard : MonoBehaviour
 {
-	public float ExpiryTime = 5f;
-
 	private Dictionary<string, List<BlackboardEntry>> dict = new Dictionary<string, List<BlackboardEntry>>();
 
-	public List<BlackboardEntry> Get(string key)
+	public List<BlackboardEntry> Read(string key)
 	{
 		if (dict.ContainsKey(key))
 		{
@@ -16,7 +16,26 @@ public class Blackboard
 		return new List<BlackboardEntry>();
 	}
 
-	public void Store(string key, object value, float expiry)
+	public List<T> Read<T>(string key) where T : class
+	{
+		if (dict.ContainsKey(key))
+		{
+			var values = dict[key];
+
+			// need to do this, as Unity nulls things when they are destroyed
+			if (!values.All(x => x.Data is T))
+			{
+				Debug.LogWarning("tried to retrieve " + typeof(T).Name);
+				return new List<T>();
+			}
+
+			return values.Select(x => x.Data as T).ToList();
+		}
+
+		return new List<T>();
+	}
+
+	public void Write(string key, object value, float expiry)
 	{
 		var entry = new BlackboardEntry
 		{
@@ -26,15 +45,24 @@ public class Blackboard
 			ExpiryTime = expiry
 		};
 
-		if (!dict.ContainsKey(key))
-		{
-			dict[key] = new List<BlackboardEntry>();
-		}
-
-		dict[key].Add(entry);
+		Write(entry);
 	}
 
-	public void Update(float time)
+	public void Write(BlackboardEntry entry)
+	{
+		if (!dict.ContainsKey(entry.Key))
+		{
+			dict[entry.Key] = new List<BlackboardEntry>();
+		}
+
+		var valueList = dict[entry.Key];
+		if (!valueList.Any(x=>x.Data == entry.Data))
+		{
+			valueList.Add(entry);
+		}
+	}
+
+	public void Update()
 	{
 		foreach (var valueSet in dict.Values)
 		{
@@ -42,7 +70,7 @@ public class Blackboard
 			{
 				var value = valueSet[i];
 
-				if (value.ExpiryTime > 0 && value.ExpiryTime < time)
+				if (value.Data == null || value.ExpiryTime > 0 && value.ExpiryTime < Time.time)
 				{
 					valueSet.Remove(value);
 				}
@@ -50,7 +78,7 @@ public class Blackboard
 		}
 	}
 
-	public class Keys
+	public static class Keys
 	{
 		public static string Enemy = "Enemy";
 	}

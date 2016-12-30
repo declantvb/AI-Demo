@@ -10,11 +10,13 @@ public class Mover : MonoBehaviour
 	public float RepelDistance = 3;
 	public float SlowMoveFactor = 0.6f;
 
-	private Sensor sensor;
+	private Vehicle vehicle;
+	private Blackboard blackboard;
 
 	private void Start()
 	{
-		sensor = GetComponent<Sensor>();
+		vehicle = GetComponent<Vehicle>();
+		blackboard = GetComponent<Blackboard>();
 	}
 
 	private void Update()
@@ -33,12 +35,18 @@ public class Mover : MonoBehaviour
 				break;
 		}
 
-		foreach (var ally in sensor.Allies)
+		foreach (var ally in blackboard.Read<Transform>("ally"))
 		{
-			var dir = ally.Transform.position - transform.position;
+			if (ally == null)
+			{
+				continue;
+			}
+
+			var dir = ally.position - transform.position;
 			var close = RepelDistance - dir.magnitude;
 
-			if (close > 0)
+			var allyVehicle = ally.GetComponent<Vehicle>();
+			if (close > 0 && allyVehicle.Fireteam == vehicle.Fireteam)
 			{
 				transform.position -= dir.normalized * close;
 			}
