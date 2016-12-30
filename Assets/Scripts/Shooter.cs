@@ -4,7 +4,9 @@ public class Shooter : MonoBehaviour
 {
 	public float Range;
 	public float Damage;
+
 	public Transform OrderTarget = null;
+	public bool AttackOnSight = true;
 
 	private void Update()
 	{

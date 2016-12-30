@@ -2,12 +2,12 @@
 
 public class MouseController : MonoBehaviour
 {
-	private Squad squad;
+	private Fireteam Fireteam;
 
 	// Use this for initialization
 	private void Start()
 	{
-		squad = GetComponent<Squad>();
+		Fireteam = GetComponent<Fireteam>();
 	}
 
 	// Update is called once per frame
@@ -19,22 +19,23 @@ public class MouseController : MonoBehaviour
 			Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 			if (Physics.Raycast(ray, out hit))
 			{
-				if (hit.collider.GetComponent<Enemy>() != null)
+				var vehicle = hit.collider.GetComponent<Vehicle>();
+				if (vehicle != null && vehicle.Faction != "Allies")
 				{
-					squad.UpdateOrder(new Order
+					Fireteam.UpdateOrder(new FireteamOrder
 					{
-						Type = Order.Types.Attack,
-						Target = hit.collider.transform,
+						Type = FireteamOrder.Types.Assault,
+						Target = hit.collider.transform.position,
 						IsDone = () => hit.collider.transform == null
 					});
 				}
 				else
 				{
-					squad.UpdateOrder(new Order
+					Fireteam.UpdateOrder(new FireteamOrder
 					{
-						Type = Order.Types.Move,
+						Type = FireteamOrder.Types.Scout,
 						Target = hit.point,
-						IsDone = () => Vector3.Distance(squad.AveragePosition, hit.point) < 5f
+						IsDone = () => Vector3.Distance(Fireteam.AveragePosition, hit.point) < 10f
 					});
 				}
 			}
