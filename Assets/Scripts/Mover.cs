@@ -35,7 +35,7 @@ public class Mover : MonoBehaviour
 				break;
 		}
 
-		foreach (var ally in blackboard.Read<Transform>("ally"))
+		foreach (var ally in blackboard.Read<Transform>(Blackboard.Keys.Ally))
 		{
 			if (ally == null)
 			{

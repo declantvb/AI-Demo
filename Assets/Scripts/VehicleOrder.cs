@@ -12,6 +12,5 @@ public class VehicleOrder
 		public const string Attack = "attack";
 		public const string Hold = "hold";
 		public const string Move = "move";
-		public const string Wander = "wander";
 	}
 }

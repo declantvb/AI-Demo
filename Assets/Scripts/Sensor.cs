@@ -26,24 +26,24 @@ public class Sensor : MonoBehaviour
 				if (seenVehicle == vehicle)
 				{
 					// it's-a me
-					return;
+					continue;
 				}
 
 				if (seenVehicle.Faction == vehicle.Faction)
 				{
-					blackboard.Write("ally", seenVehicle.transform, Time.time + 5);
+					blackboard.Write(Blackboard.Keys.Ally, seenVehicle.transform, Time.time + 5);
 				}
 				else
 				{
-					blackboard.Write("enemy", seenVehicle.transform, Time.time + 5);
+					blackboard.Write(Blackboard.Keys.Enemy, seenVehicle.transform, Time.time + 5);
 				}
 			}
 
 			var seenRepairStation = collider.GetComponent<RepairStation>();
 
-			if (seenRepairStation != null)
+			if (seenRepairStation != null && seenRepairStation.Faction == vehicle.Faction)
 			{
-				blackboard.Write("repair station", seenRepairStation.transform, Time.time + 60);
+				blackboard.Write(Blackboard.Keys.RepairStation, seenRepairStation.transform, Time.time + 600);
 			}
 		}
 	}

@@ -1,17 +1,33 @@
-﻿using UnityEngine;
+﻿using System.Linq;
+using UnityEngine;
 
 public class RepairAction : GoapAction
 {
 	private bool done = false;
 
+	public RepairAction()
+	{
+		addEffect(GoapKeys.Repaired, true);
+	}
+
 	public override bool checkProceduralPrecondition(GameObject agent)
 	{
-		var vehicle = agent.GetComponent<Vehicle>();
-		if (vehicle != null)
+		var blackboard = agent.GetComponent<Blackboard>();
+
+		if (blackboard != null)
 		{
+			var known = blackboard.Read<Transform>(Blackboard.Keys.RepairStation);
+
+			if (known.Any())
+			{
+				var closest = known.OrderBy(x => Vector3.Distance(agent.transform.position, x.position)).First();
+
+				target = closest;
+				return true;
+			}
 		}
 
-		return true;
+		return false;
 	}
 
 	public override bool isDone()
@@ -21,7 +37,14 @@ public class RepairAction : GoapAction
 
 	public override bool perform(GameObject agent)
 	{
-		done = true;
+		var fireteam = agent.GetComponent<Fireteam>();
+		if (fireteam != null)
+		{
+			if (fireteam.Members.Select(x=>x.GetComponent<Health>()).All(x=>x != null && x.Percent == 100))
+			{
+				done = true;
+			}
+		}
 		return true;
 	}
 

@@ -7,10 +7,6 @@ public class Fireteam : MonoBehaviour, IGoap
 	public float MaxScoutDistance;
 	public float MaxActionDistance;
 	public float MaxAttackEnemyDistance;
-	public float WanderDistance;
-	public float WanderError;
-	public float WanderWaitTimeMin;
-	public float WanderWaitTimeMax;
 
 	//temp
 	public bool Defend;
@@ -22,22 +18,19 @@ public class Fireteam : MonoBehaviour, IGoap
 	{
 		get
 		{
-			var nonNull = Members
-				.Where(x => x != null);
-
-			if (!nonNull.Any())
+			if (!Members.Any())
 			{
 				return Vector3.zero;
 			}
 
-			return nonNull
+			return Members
+				.Where(x => x != null)
 				.Select(x => x.transform.position)
-				.Aggregate((acc, val) => acc + val) / nonNull.Count();
+				.Aggregate((acc, val) => acc + val) / Members.Count();
 		}
 	}
 
 	private FireteamOrder currentOrder;
-	private bool attacking = false;
 	private bool moving = false;
 
 	private void Start()
@@ -52,123 +45,33 @@ public class Fireteam : MonoBehaviour, IGoap
 		//add goap actions
 		gameObject.AddComponent<ExploreAction>();
 		gameObject.AddComponent<DefendAction>();
+		gameObject.AddComponent<RepairAction>();
 	}
 
 	private void Update()
 	{
-		if (Members.All(x => x == null))
+		if (Members.Any(x => x == null))
 		{
-			return;
+			Members = Members.Where(x => x != null).ToArray();
 		}
 
-		// attack closest
-		//var enemies = blackboard.Get(Blackboard.Keys.Enemy);
-		//if (enemies.Any())
-		//{
-		//	var closest = enemies.Select(x => x.Data as Transform).OrderBy(x => x == null ? float.MaxValue : Vector3.Distance(AveragePosition, x.position)).FirstOrDefault();
-
-		//	if (closest != null)
-		//	{
-		//		DoOrder(new FireteamOrder
-		//		{
-		//			Type = FireteamOrder.Types.Assault,
-		//			Target = closest.position,
-		//			IsDone = () => closest == null
-		//		});
-
-		//		attacking = true;
-		//	}
-		//}
-		//else
-		//{
-		//	attacking = false;
-		//}
+		if (!Members.Any())
+		{
+			//ded
+			return;
+		}
 
 		// update order
 		if (currentOrder != null && currentOrder.IsDone())
 		{
+			//notify?
 			currentOrder = null;
 		}
-
-		//wander around current area
-		//if (currentOrder == null && !attacking)
-		//{
-		//	var pos = AveragePosition;
-
-		//	var fullCircle = Mathf.PI * 2;
-
-		//	var angleBetween = fullCircle / Members.Length;
-		//	var i = 0;
-		//	foreach (var member in Members)
-		//	{
-		//		if (member.currentOrder == null || member.currentOrder.Type != VehicleOrder.Types.Wander)
-		//		{
-		//			var offset = Quaternion.AngleAxis(angleBetween * i * Mathf.Rad2Deg, Vector3.up) * Vector3.forward * WanderDistance;
-		//			var rand = UnityEngine.Random.insideUnitCircle * WanderError;
-		//			var waitTime = Time.time + UnityEngine.Random.value * (WanderWaitTimeMax - WanderWaitTimeMin) + WanderWaitTimeMin;
-		//			member.UpdateOrder(new VehicleOrder
-		//			{
-		//				Type = VehicleOrder.Types.Wander,
-		//				Target = pos + offset + new Vector3(rand.x, 0, rand.y),
-		//				IsDone = x => Time.time > waitTime
-		//			});
-		//		}
-
-		//		i++;
-		//	}
-		//}
 	}
 
 	public void UpdateOrder(FireteamOrder order)
 	{
 		currentOrder = order;
-
-		DoOrder(currentOrder);
-	}
-
-	public void DoOrder(FireteamOrder order)
-	{
-		VehicleOrder memberOrder = null;
-		switch (order.Type)
-		{
-			case FireteamOrder.Types.Assault:
-				memberOrder = new VehicleOrder
-				{
-					Type = VehicleOrder.Types.Attack,
-					Target = order.Target,
-					IsDone = x => Vector3.Distance(x.transform.position, order.Target) < MaxScoutDistance && !x.EnemiesWithin(MaxAttackEnemyDistance).Any()
-				};
-				break;
-
-			//case FireteamOrder.Types.Defend:
-			//	memberOrder = new VehicleOrder
-			//	{
-			//		Type = VehicleOrder.Types.Hold,
-			//		Target = order.Target,
-			//		IsDone = ???
-			//	};
-			//	break;
-
-			case FireteamOrder.Types.Scout:
-				memberOrder = new VehicleOrder
-				{
-					Type = VehicleOrder.Types.Move,
-					Target = order.Target,
-					IsDone = x => Vector3.Distance(x.transform.position, order.Target) < MaxScoutDistance
-				};
-				break;
-
-			default:
-				break;
-		}
-
-		if (memberOrder != null)
-		{
-			foreach (var member in Members)
-			{
-				member.UpdateOrder(memberOrder);
-			}
-		}
 	}
 
 	#region IGoap members
@@ -184,7 +87,14 @@ public class Fireteam : MonoBehaviour, IGoap
 	public HashSet<KeyValuePair<string, object>> createGoalState()
 	{
 		var ret = new HashSet<KeyValuePair<string, object>> { };
-		if (Defend)
+
+		var needRepairEntry = blackboard.Read(Blackboard.Keys.NeedRepair);
+
+		if (needRepairEntry.Any())
+		{
+			ret.Add(new KeyValuePair<string, object>(GoapKeys.Repaired, true));
+		}
+		else if (Defend)
 		{
 			ret.Add(new KeyValuePair<string, object>(GoapKeys.Defending, true));
 		}
@@ -219,7 +129,7 @@ public class Fireteam : MonoBehaviour, IGoap
 		Vector3 targetPos;
 		if (nextAction.target != null)
 		{
-			targetPos = nextAction.target.transform.position;
+			targetPos = nextAction.target.position;
 		}
 		else if (nextAction.targetPosition.HasValue)
 		{
@@ -252,6 +162,10 @@ public class Fireteam : MonoBehaviour, IGoap
 			goapReset();
 			nextAction.setInRange(true);
 			return true;
+		}
+		else if (Members.All(x => x.currentOrder == null))
+		{
+			moving = false;
 		}
 
 		return false;

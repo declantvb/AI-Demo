@@ -16,7 +16,7 @@ public abstract class GoapAction : MonoBehaviour {
 
 	/**
 	 * An action often has to perform on an object. This is that object. Can be null. */
-	public GameObject target;
+	public Transform target;
 
 	/*
 	 * An action may instead have a position as a target, this is that position. */

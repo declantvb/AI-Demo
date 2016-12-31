@@ -16,6 +16,9 @@ public class Health : MonoBehaviour
 	private GUIStyle HealthBarBackground;
 	private GUIStyle HealthBarForeground;
 
+	public float Decimal { get { return CurrentHealth / MaxHealth; } }
+	public float Percent { get { return CurrentHealth / MaxHealth * 100; } }
+
 	// Use this for initialization
 	private void Start()
 	{

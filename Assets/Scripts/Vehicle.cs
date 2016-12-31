@@ -1,21 +1,33 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
 public class Vehicle : MonoBehaviour
 {
 	public string Faction;
-
+	public float FleeHealthPercent;
+	public float FleeDistance;
+	public float FleeTime;
+	public float WanderDistance;
+	public float WanderError;
+	public float WanderWaitTimeMin;
+	public float WanderWaitTimeMax;
 	public float AutoAttackRange;
+	public float NeedRepairThreshold;
 	public Fireteam Fireteam;
 
 	public VehicleOrder currentOrder;
+
+	public State currentState;
 
 	private Blackboard blackboard;
 	private Mover mover;
 	private Shooter shooter;
 	private Sensor sensor;
-	private bool distracted;
+	private Health health;
+	private float wanderWaitTime;
+	private float fleeTimeout = 0;
 
 	private void Start()
 	{
@@ -23,55 +35,156 @@ public class Vehicle : MonoBehaviour
 		mover = GetComponent<Mover>();
 		shooter = GetComponent<Shooter>();
 		sensor = GetComponent<Sensor>();
+		health = GetComponent<Health>();
 	}
 
 	private void Update()
 	{
 		var closestEnemy = ClosestEnemy();
-		if (shooter.AttackOnSight &&
-			closestEnemy != null &&
-			Vector3.Distance(transform.position, closestEnemy.transform.position) < AutoAttackRange)
+
+		if (UpdateState(closestEnemy))
 		{
-			//todo detect already distracted
-
-			DoOrder(new VehicleOrder
-			{
-				Type = VehicleOrder.Types.Attack,
-				Target = closestEnemy.transform.position,
-				IsDone = x => closestEnemy == null
-			});
-
-			distracted = true;
-		}
-		else if (distracted && currentOrder != null)
-		{
-			// get back on track
-
-			DoOrder(currentOrder);
-			distracted = false;
+			DoState(currentState, closestEnemy);
 		}
 
-		// update order
+		// reset order when complete
 		if (currentOrder != null && currentOrder.IsDone(this))
 		{
+			//notify?
 			currentOrder = null;
 			ResetChildComponents();
 		}
 
-		// update Fireteam
+		// update Fireteam with data
 		if (Fireteam != null)
 		{
 			var fireteamBlackboard = Fireteam.GetComponent<Blackboard>();
-			foreach (var enemy in blackboard.Read("enemy"))
+
+			foreach (var enemy in blackboard.Read(Blackboard.Keys.Enemy))
 			{
 				fireteamBlackboard.Write(enemy);
+			}
+
+			foreach (var repairStation in blackboard.Read(Blackboard.Keys.RepairStation))
+			{
+				fireteamBlackboard.Write(repairStation);
+			}
+
+			if (health.Percent < NeedRepairThreshold)
+			{
+				fireteamBlackboard.Write(Blackboard.Keys.NeedRepair, this, Time.time + 1);
 			}
 		}
 	}
 
+	private bool UpdateState(Transform closestEnemy)
+	{
+		var newState = State.Idle;
+
+		if (fleeTimeout > Time.time || 
+			(closestEnemy != null &&
+			Vector3.Distance(closestEnemy.position, transform.position) < FleeDistance &&
+			health.Percent < FleeHealthPercent))
+		{
+			newState = State.Flee;
+		}
+		else if (closestEnemy != null &&
+			shooter.AttackOnSight &&
+			Vector3.Distance(transform.position, closestEnemy.position) < AutoAttackRange)
+		{
+			newState = State.Fight;
+		}
+		else if (currentOrder != null)
+		{
+			newState = State.FollowOrders;
+		}
+
+		if (currentState == State.FollowOrders && newState == State.FollowOrders)
+		{
+			return false;
+		}
+		currentState = newState;
+		return true;
+	}
+
+	private void DoState(State state, Transform closestEnemy)
+	{
+		switch (state)
+		{
+			case State.Idle:
+				DoIdle();
+				break;
+
+			case State.Fight:
+				DoFight(closestEnemy);
+				break;
+
+			case State.Flee:
+				DoFlee(closestEnemy);
+				break;
+
+			case State.FollowOrders:
+				DoOrder(currentOrder);
+				break;
+
+			default:
+				Debug.LogError("invalid state");
+				break;
+		}
+	}
+
+	private void DoFlee(Transform closestEnemy)
+	{
+		if (closestEnemy != null)
+		{
+			// flee faster than chasers
+
+			var diff = closestEnemy.position - transform.position;
+
+			Move(transform.position - diff.normalized * FleeDistance, false);
+
+			fleeTimeout = Time.time + FleeTime;
+		}
+	}
+
+	private void DoFight(Transform closestEnemy)
+	{
+		if (closestEnemy != null)
+		{
+			// only chanse fleeing enemy so far
+
+			Move(closestEnemy.position, attack: true, range: shooter.Range);
+		}
+	}
+
+	private void DoIdle()
+	{
+		if (wanderWaitTime > Time.time)
+		{
+			// already wandering
+			return;
+		}
+
+		var middlePos = Fireteam.AveragePosition;
+
+		var angleBetween = Mathf.PI * 2 / Fireteam.Members.Length;
+		var i = Array.IndexOf(Fireteam.Members, this);
+
+		var offset = Quaternion.AngleAxis(angleBetween * i * Mathf.Rad2Deg, Vector3.up) * Vector3.forward * WanderDistance;
+		var rand = UnityEngine.Random.insideUnitCircle * WanderError;
+		var fudge = new Vector3(rand.x, 0, rand.y);
+
+		// change middle to target pos?
+		// if other team mates are still on their way the idle point is still in middle of team
+
+		Move(middlePos + offset + fudge, slowMove: true);
+
+		wanderWaitTime = Time.time + UnityEngine.Random.value * (WanderWaitTimeMax - WanderWaitTimeMin) + WanderWaitTimeMin;
+	}
+
 	public Transform ClosestEnemy()
 	{
-		return blackboard.Read<Transform>("enemy")
+		return blackboard.Read<Transform>(Blackboard.Keys.Enemy)
 			.Where(x => x != null)
 			.OrderBy(x => Vector3.Distance(transform.position, x.position))
 			.FirstOrDefault();
@@ -79,7 +192,7 @@ public class Vehicle : MonoBehaviour
 
 	public List<Transform> EnemiesWithin(float distance)
 	{
-		return blackboard.Read<Transform>("enemy")
+		return blackboard.Read<Transform>(Blackboard.Keys.Enemy)
 			.Where(x => x != null && Vector3.Distance(transform.position, x.position) < distance)
 			.ToList();
 	}
@@ -89,6 +202,11 @@ public class Vehicle : MonoBehaviour
 		currentOrder = order;
 
 		DoOrder(currentOrder);
+	}
+
+	public bool OrderComplete()
+	{
+		return currentOrder.IsDone(this);
 	}
 
 	public void DoOrder(VehicleOrder order)
@@ -103,19 +221,10 @@ public class Vehicle : MonoBehaviour
 				Move(order.Target);
 				break;
 
-			case VehicleOrder.Types.Wander:
-				Move(order.Target, slowMove: true);
-				break;
-
 			default:
 				Debug.LogWarning("bad order type");
 				break;
 		}
-	}
-
-	public bool OrderComplete()
-	{
-		return currentOrder.IsDone(this);
 	}
 
 	private void Move(Vector3 target, bool? attack = null, float range = 0f, bool slowMove = false)
@@ -124,7 +233,7 @@ public class Vehicle : MonoBehaviour
 		if (attack.HasValue && attack.Value)
 		{
 			float closestDistance = float.MaxValue;
-			foreach (var enemy in blackboard.Read<Transform>("enemy"))
+			foreach (var enemy in blackboard.Read<Transform>(Blackboard.Keys.Enemy))
 			{
 				if (enemy == null || this == null)
 				{
@@ -154,5 +263,13 @@ public class Vehicle : MonoBehaviour
 		mover.OrderTarget = Vector3.zero;
 		mover.OrderTargetRange = 0f;
 		mover.MoveType = MoveType.None;
+	}
+
+	public enum State
+	{
+		Idle,
+		Fight,
+		Flee,
+		FollowOrders
 	}
 }

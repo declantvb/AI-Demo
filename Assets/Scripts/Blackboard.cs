@@ -16,6 +16,11 @@ public class Blackboard : MonoBehaviour
 		return new List<BlackboardEntry>();
 	}
 
+	public List<BlackboardEntry> ReadAll()
+	{
+		return dict.Values.SelectMany(x => x).ToList();
+	}
+
 	public List<T> Read<T>(string key) where T : class
 	{
 		if (dict.ContainsKey(key))
@@ -35,15 +40,14 @@ public class Blackboard : MonoBehaviour
 		return new List<T>();
 	}
 
-	public void Write(string key, object value, float expiry)
+	public void Write(string key, object data, float expiry)
 	{
 		var entry = new BlackboardEntry
-		{
-			Key = key,
-			Type = value.GetType().Name,
-			Data = value,
-			ExpiryTime = expiry
-		};
+		(
+			key: key,
+			data: data,
+			expiry: expiry
+		);
 
 		Write(entry);
 	}
@@ -56,9 +60,15 @@ public class Blackboard : MonoBehaviour
 		}
 
 		var valueList = dict[entry.Key];
-		if (!valueList.Any(x=>x.Data == entry.Data))
+		var existing = valueList.FirstOrDefault(x => x.Data == entry.Data);
+
+		if (existing == null)
 		{
 			valueList.Add(entry);
+		}
+		else
+		{
+			existing.ExpiryTime = entry.ExpiryTime;
 		}
 	}
 
@@ -70,7 +80,8 @@ public class Blackboard : MonoBehaviour
 			{
 				var value = valueSet[i];
 
-				if (value.Data == null || value.ExpiryTime > 0 && value.ExpiryTime < Time.time)
+				if ((value.Data is Object && value.Data as Object == null) || 
+					value.ExpiryTime > 0 && value.ExpiryTime < Time.time)
 				{
 					valueSet.Remove(value);
 				}
@@ -80,14 +91,24 @@ public class Blackboard : MonoBehaviour
 
 	public static class Keys
 	{
-		public static string Enemy = "Enemy";
+		public const string Enemy = "enemy";
+		public const string Ally = "ally";
+		public const string RepairStation = "repair station";
+		public const string NeedRepair = "need repair";
 	}
 }
 
+// mostly immutable
 public class BlackboardEntry
 {
-	public string Key;
-	public string Type;
-	public object Data;
-	public float ExpiryTime;
+	public string Key { get; private set; }
+	public object Data { get; private set; }
+	public float ExpiryTime { get; set; }
+
+	public BlackboardEntry(string key, object data, float expiry)
+	{
+		Key = key;
+		Data = data;
+		ExpiryTime = expiry;
+	}
 }
