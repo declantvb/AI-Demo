@@ -5,14 +5,14 @@ public class Shooter : MonoBehaviour
 	public float Range;
 	public float Damage;
 
-	public Transform OrderTarget = null;
+	public Transform Target = null;
 	public bool AttackOnSight = true;
 
 	private void Update()
 	{
-		if (OrderTarget != null && Vector3.Distance(transform.position, OrderTarget.position) < Range)
+		if (Target != null && Vector3.Distance(transform.position, Target.position) < Range)
 		{
-			var health = OrderTarget.GetComponent<Health>();
+			var health = Target.GetComponent<Health>();
 
 			if (health != null)
 			{
@@ -23,11 +23,17 @@ public class Shooter : MonoBehaviour
 
 	private void OnDrawGizmos()
 	{
-		if (OrderTarget != null)
+		if (Target != null)
 		{
 			Gizmos.color = Color.red;
-			Gizmos.DrawLine(transform.position, OrderTarget.transform.position);
+			Gizmos.DrawLine(transform.position, Target.transform.position);
 			Gizmos.color = Color.white;
 		}
+	}
+
+	public void Reset()
+	{
+		Target = null;
+		AttackOnSight = true;
 	}
 }

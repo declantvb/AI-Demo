@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -15,6 +14,7 @@ public class Vehicle : MonoBehaviour
 	public float WanderWaitTimeMax;
 	public float AutoAttackRange;
 	public float NeedRepairThreshold;
+	public float MaxDistanceFromLeader;
 	public Fireteam Fireteam;
 
 	public VehicleOrder currentOrder;
@@ -79,32 +79,48 @@ public class Vehicle : MonoBehaviour
 
 	private bool UpdateState(Transform closestEnemy)
 	{
-		var newState = State.Idle;
+		var oldState = currentState;
 
-		if (fleeTimeout > Time.time || 
-			(closestEnemy != null &&
-			Vector3.Distance(closestEnemy.position, transform.position) < FleeDistance &&
-			health.Percent < FleeHealthPercent))
+		if (fleeTimeout > Time.time)
 		{
-			newState = State.Flee;
-		}
-		else if (closestEnemy != null &&
-			shooter.AttackOnSight &&
-			Vector3.Distance(transform.position, closestEnemy.position) < AutoAttackRange)
-		{
-			newState = State.Fight;
-		}
-		else if (currentOrder != null)
-		{
-			newState = State.FollowOrders;
-		}
-
-		if (currentState == State.FollowOrders && newState == State.FollowOrders)
-		{
+			currentState = State.Flee;
 			return false;
 		}
-		currentState = newState;
-		return true;
+
+		if (closestEnemy != null &&
+		 Vector3.Distance(closestEnemy.position, transform.position) < FleeDistance &&
+		 health.Percent < FleeHealthPercent)
+		{
+			currentState = State.Flee;
+			return true;
+		}
+
+		if (Vector3.Distance(transform.position, Fireteam.AveragePosition()) < MaxDistanceFromLeader)
+		{
+			if (shooter.Target != null &&
+				Vector3.Distance(transform.position, shooter.Target.position) < AutoAttackRange)
+			{
+				currentState = State.Fight;
+				return false;
+			}
+
+			if (shooter.AttackOnSight &&
+				closestEnemy != null &&
+				Vector3.Distance(transform.position, closestEnemy.position) < AutoAttackRange)
+			{
+				currentState = State.Fight;
+				return true;
+			}
+		}
+
+		if (currentOrder != null)
+		{
+			currentState = State.FollowOrders;
+			return oldState != currentState;
+		}
+
+		currentState = State.Idle;
+		return oldState != currentState;
 	}
 
 	private void DoState(State state, Transform closestEnemy)
@@ -141,7 +157,7 @@ public class Vehicle : MonoBehaviour
 
 			var diff = closestEnemy.position - transform.position;
 
-			Move(transform.position - diff.normalized * FleeDistance, false);
+			Move(null, transform.position - diff.normalized * FleeDistance, false);
 
 			fleeTimeout = Time.time + FleeTime;
 		}
@@ -153,7 +169,8 @@ public class Vehicle : MonoBehaviour
 		{
 			// only chanse fleeing enemy so far
 
-			Move(closestEnemy.position, attack: true, range: shooter.Range);
+			Move(closestEnemy, withTeam: false, range: shooter.Range);
+			Attack(closestEnemy);
 		}
 	}
 
@@ -165,10 +182,10 @@ public class Vehicle : MonoBehaviour
 			return;
 		}
 
-		var middlePos = Fireteam.AveragePosition;
+		var middlePos = Fireteam.AveragePosition();
 
 		var angleBetween = Mathf.PI * 2 / Fireteam.Members.Length;
-		var i = Array.IndexOf(Fireteam.Members, this);
+		var i = Fireteam.GetIndex(this);
 
 		var offset = Quaternion.AngleAxis(angleBetween * i * Mathf.Rad2Deg, Vector3.up) * Vector3.forward * WanderDistance;
 		var rand = UnityEngine.Random.insideUnitCircle * WanderError;
@@ -177,7 +194,7 @@ public class Vehicle : MonoBehaviour
 		// change middle to target pos?
 		// if other team mates are still on their way the idle point is still in middle of team
 
-		Move(middlePos + offset + fudge, slowMove: true);
+		Move(null, middlePos + offset + fudge, slowMove: true);
 
 		wanderWaitTime = Time.time + UnityEngine.Random.value * (WanderWaitTimeMax - WanderWaitTimeMin) + WanderWaitTimeMin;
 	}
@@ -201,24 +218,29 @@ public class Vehicle : MonoBehaviour
 	{
 		currentOrder = order;
 
-		DoOrder(currentOrder);
-	}
-
-	public bool OrderComplete()
-	{
-		return currentOrder.IsDone(this);
+		currentState = State.Idle;
 	}
 
 	public void DoOrder(VehicleOrder order)
 	{
 		switch (order.Type)
 		{
-			case VehicleOrder.Types.Attack:
-				Move(order.Target, attack: true, range: shooter.Range);
+			case VehicleOrderType.Attack:
+				if (order.Target != null)
+				{
+					Move(order.Target, range: shooter.Range);
+					Attack(order.Target);
+				}
+				else
+				{
+					Move(null, order.TargetPosition, range: shooter.Range);
+					Attack(null, order.TargetPosition);
+				}
 				break;
 
-			case VehicleOrder.Types.Move:
-				Move(order.Target);
+			case VehicleOrderType.Move:
+				Move(order.Target, order.TargetPosition);
+				Attack(null);
 				break;
 
 			default:
@@ -227,10 +249,9 @@ public class Vehicle : MonoBehaviour
 		}
 	}
 
-	private void Move(Vector3 target, bool? attack = null, float range = 0f, bool slowMove = false)
+	private void Attack(Transform target, Vector3? targetPos = null, bool attackOnSight = true)
 	{
-		Transform closestToTarget = null;
-		if (attack.HasValue && attack.Value)
+		if (target == null && targetPos.HasValue)
 		{
 			float closestDistance = float.MaxValue;
 			foreach (var enemy in blackboard.Read<Transform>(Blackboard.Keys.Enemy))
@@ -240,29 +261,79 @@ public class Vehicle : MonoBehaviour
 					continue;
 				}
 
-				var dist = Vector3.Distance(transform.position, enemy.position);
+				var dist = Vector3.Distance(targetPos.Value, enemy.position);
 				if (dist < closestDistance)
 				{
-					closestToTarget = enemy;
+					target = enemy;
 					closestDistance = dist;
 				}
 			}
 		}
 
-		shooter.OrderTarget = closestToTarget;
-		shooter.AttackOnSight = !attack.HasValue || attack.Value;
-		mover.OrderTarget = target;
-		mover.OrderTargetRange = range;
+		shooter.Reset();
+		shooter.Target = target;
+		shooter.AttackOnSight = attackOnSight;
+	}
+
+	private void Move(Transform target, Vector3? targetPos = null, bool withTeam = true, float range = 0f, bool slowMove = false)
+	{
+		mover.Reset();
 		mover.MoveType = slowMove ? MoveType.SlowMove : MoveType.Move;
+
+		var isLeader = Fireteam.GetLeader() == this;
+		if (isLeader || !withTeam)
+		{
+			if (target != null)
+			{
+				mover.Target = target;
+			}
+			else if (targetPos.HasValue)
+			{
+				mover.TargetPosition = targetPos.Value;
+			}
+			else
+			{
+				Debug.LogError("move with no target");
+			}
+
+			mover.OrderTargetRange = range;
+
+			if (isLeader)
+			{
+				var formation = Fireteam.Formation;
+				mover.FormationCorrection = () =>
+				{
+					var points = Fireteam.Members
+					.Where(x => x != null)
+					.Select(x => transform.InverseTransformPoint(x.transform.position))
+					.ToArray();
+
+					return formation.SeparationCorrection(points);
+				};
+			}
+		}
+		else
+		{
+			var pos = Fireteam.Formation.Get(Fireteam.GetIndex(this));
+
+			mover.Target = Fireteam.GetLeader().transform;
+			mover.TargetOffset = pos;
+		}
+	}
+
+	public void OnDrawGizmos()
+	{
+		if (Fireteam != null)
+		{
+			Gizmos.color = Color.yellow;
+			Gizmos.DrawLine(transform.position, Fireteam.AveragePosition());
+		}
 	}
 
 	private void ResetChildComponents()
 	{
-		shooter.OrderTarget = null;
-		shooter.AttackOnSight = true;
-		mover.OrderTarget = Vector3.zero;
-		mover.OrderTargetRange = 0f;
-		mover.MoveType = MoveType.None;
+		shooter.Reset();
+		mover.Reset();
 	}
 
 	public enum State

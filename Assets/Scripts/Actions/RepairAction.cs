@@ -40,7 +40,7 @@ public class RepairAction : GoapAction
 		var fireteam = agent.GetComponent<Fireteam>();
 		if (fireteam != null)
 		{
-			if (fireteam.Members.Select(x=>x.GetComponent<Health>()).All(x=>x != null && x.Percent == 100))
+			if (fireteam.Members.Select(x => x.GetComponent<Health>()).All(x => x != null && x.Percent == 100))
 			{
 				done = true;
 			}

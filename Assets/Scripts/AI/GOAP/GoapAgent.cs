@@ -101,8 +101,15 @@ public sealed class GoapAgent : MonoBehaviour {
 				return;
 			}
 
+			if (dataProvider.abortPlan())
+			{
+				//manual abort of plan
+				fsm.popState();
+				fsm.pushState(idleState);
+				dataProvider.planAborted(null);
+			}
 			// get the agent to move itself
-			if ( dataProvider.moveAgent(action) ) {
+			else if( dataProvider.moveAgent(action) ) {
 				fsm.popState();
 			}
 
@@ -146,7 +153,14 @@ public sealed class GoapAgent : MonoBehaviour {
 				currentActions.Dequeue();
 			}
 
-			if (hasActionPlan()) {
+			if (dataProvider.abortPlan())
+			{
+				//manual abort of plan
+				fsm.popState();
+				fsm.pushState(idleState);
+				dataProvider.planAborted(null);
+			}
+			else if (hasActionPlan()) {
 				// perform the next action
 				action = currentActions.Peek();
 				bool inRange = action.requiresInRange() ? action.isInRange() : true;

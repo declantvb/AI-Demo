@@ -19,7 +19,7 @@ public class Sensor : MonoBehaviour
 
 		foreach (var collider in seen)
 		{
-			var seenVehicle = collider.GetComponent<Vehicle>();
+			var seenVehicle = collider.GetComponentInParent<Vehicle>();
 
 			if (seenVehicle != null)
 			{
@@ -39,33 +39,12 @@ public class Sensor : MonoBehaviour
 				}
 			}
 
-			var seenRepairStation = collider.GetComponent<RepairStation>();
+			var seenRepairStation = collider.GetComponentInParent<RepairStation>();
 
 			if (seenRepairStation != null && seenRepairStation.Faction == vehicle.Faction)
 			{
 				blackboard.Write(Blackboard.Keys.RepairStation, seenRepairStation.transform, Time.time + 600);
 			}
 		}
-	}
-
-	private void OnDrawGizmos()
-	{
-		//Gizmos.color = Color.yellow;
-		//foreach (var enemy in blackboard.Get("enemy"))
-		//{
-		//	if (enemy.Transform != null)
-		//	{
-		//		Gizmos.DrawLine(transform.position, enemy.Transform.position);
-		//	}
-		//}
-		//Gizmos.color = Color.green;
-		//foreach (var enemy in Allies)
-		//{
-		//	if (enemy.Transform != null)
-		//	{
-		//		Gizmos.DrawLine(transform.position, enemy.Transform.position);
-		//	}
-		//}
-		//Gizmos.color = Color.white;
 	}
 }

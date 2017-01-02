@@ -12,7 +12,7 @@ public class RepairStation : MonoBehaviour
 
 		foreach (var collider in nearby)
 		{
-			var vehicle = collider.GetComponent<Vehicle>();
+			var vehicle = collider.GetComponentInParent<Vehicle>();
 			if (vehicle != null && vehicle.Faction == Faction)
 			{
 				var health = vehicle.GetComponent<Health>();

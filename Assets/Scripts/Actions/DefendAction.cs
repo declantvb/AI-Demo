@@ -6,13 +6,26 @@ public class DefendAction : GoapAction
 
 	public DefendAction()
 	{
-		addPrecondition(GoapKeys.ShouldDefend, true);
-		addEffect(GoapKeys.Defending, true);
+		addEffect(GoapKeys.Defended, true);
 	}
 
 	public override bool checkProceduralPrecondition(GameObject agent)
 	{
-		return true;
+		var fireteam = agent.GetComponent<Fireteam>();
+		if (fireteam != null && fireteam.currentOrder != null && fireteam.currentOrder.Type == FireteamOrderType.Defend)
+		{
+			if (fireteam.currentOrder.Target != null)
+			{
+				target = fireteam.currentOrder.Target;
+			}
+			else
+			{
+				targetPosition = fireteam.currentOrder.TargetPosition;
+			}
+			return true;
+		}
+
+		return false;
 	}
 
 	public override bool isDone()
@@ -22,12 +35,13 @@ public class DefendAction : GoapAction
 
 	public override bool perform(GameObject agent)
 	{
+		//when is this done?
 		return true;
 	}
 
 	public override bool requiresInRange()
 	{
-		return false;
+		return true;
 	}
 
 	public override void reset()

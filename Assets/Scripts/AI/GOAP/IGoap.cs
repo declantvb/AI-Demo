@@ -49,7 +49,7 @@ public interface IGoap
 
 	/**
 	 * One of the actions caused the plan to abort.
-	 * That action is returned.
+	 * That action is returned (or null if the plan was manually aborted).
 	 */
 	void planAborted (GoapAction aborter);
 
@@ -60,5 +60,11 @@ public interface IGoap
 	 * False if it is not there yet.
 	 */
 	bool moveAgent(GoapAction nextAction);
+
+	/**
+	 * Called for each step in executing a plan, if returns true, the plan is 
+	 * aborted and a new plan will be made
+	 */
+	bool abortPlan();
 }
 
