@@ -12,8 +12,7 @@ public class Fireteam : MonoBehaviour, IGoap
 	public float FormationCorrection;
 	public float NeedRepairAbortPercent;
 	public Formation Formation;
-
-	[ReadOnly]
+	
 	public FireteamOrder currentOrder;
 
 	private bool moving = false;

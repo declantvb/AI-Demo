@@ -24,7 +24,7 @@ public class BlackboardEditor : Editor
 		{
 			foreach (var row in blackboard.ReadAll())
 			{
-				var rect = EditorGUILayout.BeginHorizontal();
+				EditorGUILayout.BeginHorizontal();
 				EditorGUILayout.TextField(row.Key);
 				if (row.Data is Object)
 				{

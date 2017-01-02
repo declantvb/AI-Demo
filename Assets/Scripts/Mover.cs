@@ -109,7 +109,7 @@ public class Mover : MonoBehaviour
 
 	public void OnDrawGizmos()
 	{
-		if (targetPos != null && MoveType != MoveType.None)
+		if (MoveType != MoveType.None)
 		{
 			Gizmos.DrawLine(transform.position, targetPos);
 		}

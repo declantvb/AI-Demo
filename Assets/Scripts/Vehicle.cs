@@ -24,7 +24,6 @@ public class Vehicle : MonoBehaviour
 	private Blackboard blackboard;
 	private Mover mover;
 	private Shooter shooter;
-	private Sensor sensor;
 	private Health health;
 	private float wanderWaitTime;
 	private float fleeTimeout = 0;
@@ -34,7 +33,6 @@ public class Vehicle : MonoBehaviour
 		blackboard = GetComponent<Blackboard>();
 		mover = GetComponent<Mover>();
 		shooter = GetComponent<Shooter>();
-		sensor = GetComponent<Sensor>();
 		health = GetComponent<Health>();
 	}
 
