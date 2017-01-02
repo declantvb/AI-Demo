@@ -3,13 +3,15 @@ using UnityEngine;
 
 public class AttackAction : GoapAction
 {
+	public float MaxChaseDistance;
+
 	private float clearRadius;
 	private bool destroyTarget = false;
 	private bool done = false;
 
 	public AttackAction()
 	{
-		addEffect(GoapKeys.Attacked, true);
+		addEffect(GoapKeys.Attack, true);
 		cost = 2f;
 	}
 
@@ -58,13 +60,16 @@ public class AttackAction : GoapAction
 	{
 		if (destroyTarget)
 		{
-			if (target != null)
+			if (target == null)
 			{
 				done = true;
+				return true;
 			}
 
-			//check if still in range
-			return true;
+			if (Vector3.Distance(agent.transform.position, target.position) < MaxChaseDistance)
+			{
+				return true;
+			}
 		}
 		else if (targetPosition.HasValue)
 		{

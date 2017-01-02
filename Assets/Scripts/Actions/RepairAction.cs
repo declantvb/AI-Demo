@@ -7,7 +7,9 @@ public class RepairAction : GoapAction
 
 	public RepairAction()
 	{
-		addEffect(GoapKeys.Repaired, true);
+		addPrecondition(GoapKeys.InCombat, false);
+		addPrecondition(GoapKeys.Damaged, true);
+		addEffect(GoapKeys.Damaged, false);
 	}
 
 	public override bool checkProceduralPrecondition(GameObject agent)

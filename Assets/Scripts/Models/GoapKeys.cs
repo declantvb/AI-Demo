@@ -1,9 +1,12 @@
 ﻿public class GoapKeys
 {
+	public const string Damaged = "damaged";
 	public const string SeenEnemy = "seen enemy";
-	public const string ShouldDefend = "should defend";
+	public const string InCombat = "in combat";
+	public const string AlliesDown = "allies down";
 
-	public const string Repaired = "repaired";
-	public const string Defended = "defending";
-	public const string Attacked = "attacked";
+	public const string ShouldFlee = "flee";
+	public const string Defend = "defending";
+	public const string Attack = "attacking";
+
 }

@@ -27,13 +27,6 @@ public class Blackboard : MonoBehaviour
 		{
 			var values = dict[key];
 
-			// need to do this, as Unity nulls things when they are destroyed
-			if (!values.All(x => x.Data is T))
-			{
-				Debug.LogWarning("tried to retrieve " + typeof(T).Name);
-				return new List<T>();
-			}
-
 			return values.Select(x => x.Data as T).ToList();
 		}
 
@@ -80,7 +73,7 @@ public class Blackboard : MonoBehaviour
 			{
 				var value = valueSet[i];
 
-				if ((value.Data is Object && value.Data as Object == null) || 
+				if ((value.Data is Object && value.Data as Object == null) ||
 					value.ExpiryTime > 0 && value.ExpiryTime < Time.time)
 				{
 					valueSet.Remove(value);
@@ -95,6 +88,9 @@ public class Blackboard : MonoBehaviour
 		public const string Ally = "ally";
 		public const string RepairStation = "repair station";
 		public const string NeedRepair = "need repair";
+		public const string Attacking = "attacking";
+		public const string Fleeing = "fleeing";
+		public const string AllyDown = "ally down";
 	}
 }
 

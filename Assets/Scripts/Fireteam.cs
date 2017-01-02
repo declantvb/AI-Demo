@@ -8,6 +8,8 @@ public class Fireteam : MonoBehaviour, IGoap
 	public float MaxScoutDistance;
 	public float MaxActionDistance;
 	public float MaxAttackEnemyDistance;
+	public float MaxChaseDistance;
+	public float RetreatDistance;
 	public float FormationSeparationDistance;
 	public float FormationCorrection;
 	public float NeedRepairAbortPercent;
@@ -22,7 +24,6 @@ public class Fireteam : MonoBehaviour, IGoap
 	private Blackboard blackboard;
 	public Vehicle Leader;
 	public Vehicle[] Members;
-	private Formation[] Formations;
 
 	public Vehicle GetLeader()
 	{
@@ -43,7 +44,7 @@ public class Fireteam : MonoBehaviour, IGoap
 		return Array.IndexOf(Members, vehicle);
 	}
 
-	public Vector3 AveragePosition()
+	private Vector3 averagePosition()
 	{
 		if (!Members.Any())
 		{
@@ -58,7 +59,7 @@ public class Fireteam : MonoBehaviour, IGoap
 
 	private void Start()
 	{
-		ChangeFormation(new WedgeFormation());
+		ChangeFormation(new LineFormation());
 
 		blackboard = GetComponent<Blackboard>();
 
@@ -72,6 +73,10 @@ public class Fireteam : MonoBehaviour, IGoap
 		gameObject.AddComponent<AttackAction>();
 		gameObject.AddComponent<DefendAction>();
 		gameObject.AddComponent<RepairAction>();
+		gameObject.AddComponent<RetreatAction>();
+
+		GetComponent<AttackAction>().MaxChaseDistance = MaxChaseDistance;
+		GetComponent<RetreatAction>().RetreatDistance = RetreatDistance;
 	}
 
 	private void Update()
@@ -79,6 +84,9 @@ public class Fireteam : MonoBehaviour, IGoap
 		if (Members.Any(x => x == null))
 		{
 			Members = Members.Where(x => x != null).ToArray();
+
+			// fix current plans
+			needToAbortPlan = true;
 		}
 
 		if (!Members.Any())
@@ -87,6 +95,8 @@ public class Fireteam : MonoBehaviour, IGoap
 			return;
 		}
 
+		transform.position = averagePosition();
+
 		// update order
 		if (currentOrder != null && currentOrder.IsDone())
 		{
@@ -94,10 +104,32 @@ public class Fireteam : MonoBehaviour, IGoap
 			currentOrder = null;
 		}
 
+		CheckForAbortConditions();
+	}
+
+	private void CheckForAbortConditions()
+	{
 		var needRepairEntry = blackboard.Read(Blackboard.Keys.NeedRepair);
-		if ((currentGoal == null || !currentGoal.Any(x => x.Key == GoapKeys.Repaired)) && (needRepairEntry.Count / (float)Members.Length * 100) > NeedRepairAbortPercent)
+		var alliesDown = blackboard.Read(Blackboard.Keys.AllyDown);
+		if (currentGoal != null && currentGoal.Any(x => x.Key == GoapKeys.Damaged))
+		{
+			return;
+		}
+		else if ((needRepairEntry.Count / (float)(Members.Length + alliesDown.Count) * 100) >= NeedRepairAbortPercent)
 		{
 			needToAbortPlan = true;
+			return;
+		}
+
+		var attacking = blackboard.Read<Transform>(Blackboard.Keys.Attacking);
+		if (currentGoal != null && currentGoal.Any(x => x.Key == GoapKeys.Attack))
+		{
+			return;
+		}
+		else if (attacking.Any())
+		{
+			needToAbortPlan = true;
+			return;
 		}
 	}
 
@@ -114,41 +146,47 @@ public class Fireteam : MonoBehaviour, IGoap
 		Formation = newFormation;
 		Formation.SeparationDistance = FormationSeparationDistance;
 		Formation.CorrectionSpeed = FormationCorrection;
-
-		//update move commands
-
 	}
 
 	#region IGoap members
 
 	public HashSet<KeyValuePair<string, object>> getWorldState()
 	{
-		return new HashSet<KeyValuePair<string, object>> { };
+		var state = new HashSet<KeyValuePair<string, object>> { };
+
+		state.Add(new KeyValuePair<string, object>(GoapKeys.AlliesDown, blackboard.Read(Blackboard.Keys.AllyDown).Count));
+		state.Add(new KeyValuePair<string, object>(GoapKeys.Damaged, blackboard.Read(Blackboard.Keys.NeedRepair).Any()));
+		state.Add(new KeyValuePair<string, object>(GoapKeys.SeenEnemy, blackboard.Read(Blackboard.Keys.Enemy).Any()));
+		state.Add(new KeyValuePair<string, object>(GoapKeys.InCombat, blackboard.Read(Blackboard.Keys.Attacking).Any()));
+
+		return state;
 	}
 
 	public HashSet<KeyValuePair<string, object>> createGoalState()
 	{
-		var ret = new HashSet<KeyValuePair<string, object>> { };
+		var goal = new HashSet<KeyValuePair<string, object>> { };
 
-		var needRepairEntry = blackboard.Read(Blackboard.Keys.NeedRepair);
-
-		if (needRepairEntry.Any())
+		if (blackboard.Read(Blackboard.Keys.NeedRepair).Any())
 		{
-			ret.Add(new KeyValuePair<string, object>(GoapKeys.Repaired, true));
+			goal.Add(new KeyValuePair<string, object>(GoapKeys.Damaged, false));
+		}
+		else if (blackboard.Read(Blackboard.Keys.Attacking).Any())
+		{
+			goal.Add(new KeyValuePair<string, object>(GoapKeys.Attack, true));
 		}
 		else if (currentOrder != null)
 		{
 			if (currentOrder.Type == FireteamOrderType.Assault)
 			{
-				ret.Add(new KeyValuePair<string, object>(GoapKeys.Attacked, true));
+				goal.Add(new KeyValuePair<string, object>(GoapKeys.Attack, true));
 			}
 			else if (currentOrder.Type == FireteamOrderType.Defend)
 			{
-				ret.Add(new KeyValuePair<string, object>(GoapKeys.Defended, true));
+				goal.Add(new KeyValuePair<string, object>(GoapKeys.Defend, true));
 			}
 		}
 
-		return ret;
+		return goal;
 	}
 
 	public void planFailed(HashSet<KeyValuePair<string, object>> failedGoal)
@@ -166,7 +204,7 @@ public class Fireteam : MonoBehaviour, IGoap
 	public void actionsFinished()
 	{
 		goapReset();
-		Debug.Log("plan finished");
+		//Debug.Log("plan finished");
 	}
 
 	public void planAborted(GoapAction aborter)
@@ -192,6 +230,8 @@ public class Fireteam : MonoBehaviour, IGoap
 			return true;
 		}
 
+		var imperative = nextAction is RetreatAction;
+
 		if (!moving)
 		{
 			VehicleOrder memberOrder;
@@ -203,7 +243,8 @@ public class Fireteam : MonoBehaviour, IGoap
 				{
 					Type = orderType,
 					Target = nextAction.target,
-					IsDone = x => Vector3.Distance(x.transform.position, nextAction.target.position) < MaxScoutDistance
+					IsDone = x => nextAction.target != null && Vector3.Distance(x.transform.position, nextAction.target.position) < MaxScoutDistance,
+					IsImperative = imperative
 				};
 			}
 			else
@@ -212,7 +253,8 @@ public class Fireteam : MonoBehaviour, IGoap
 				{
 					Type = orderType,
 					TargetPosition = targetPos,
-					IsDone = x => Vector3.Distance(x.transform.position, targetPos) < MaxScoutDistance
+					IsDone = x => Vector3.Distance(x.transform.position, targetPos) < MaxScoutDistance,
+					IsImperative = imperative
 				};
 			}
 
@@ -226,11 +268,12 @@ public class Fireteam : MonoBehaviour, IGoap
 		else if (GetLeader() != null && Vector3.Distance(GetLeader().transform.position, targetPos) < MaxActionDistance)
 		{
 			goapReset();
+			// hold position
 			Leader.UpdateOrder(new VehicleOrder
 			{
 				Type = VehicleOrderType.Move,
 				TargetPosition = Leader.transform.position,
-				IsDone = x => nextAction.isDone()
+				IsDone = _ => nextAction.isDone()
 			});
 
 			nextAction.setInRange(true);

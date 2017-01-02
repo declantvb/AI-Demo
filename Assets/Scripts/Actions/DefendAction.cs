@@ -6,7 +6,7 @@ public class DefendAction : GoapAction
 
 	public DefendAction()
 	{
-		addEffect(GoapKeys.Defended, true);
+		addEffect(GoapKeys.Defend, true);
 	}
 
 	public override bool checkProceduralPrecondition(GameObject agent)

@@ -28,6 +28,10 @@ public class Vehicle : MonoBehaviour
 	private float wanderWaitTime;
 	private float fleeTimeout = 0;
 
+	//for debugging
+	[SerializeField]
+	private string OrderName;
+
 	private void Start()
 	{
 		blackboard = GetComponent<Blackboard>();
@@ -38,6 +42,8 @@ public class Vehicle : MonoBehaviour
 
 	private void Update()
 	{
+		OrderName = currentOrder != null ? currentOrder.Type.ToString() : "";
+
 		var closestEnemy = ClosestEnemy();
 
 		if (UpdateState(closestEnemy))
@@ -72,6 +78,15 @@ public class Vehicle : MonoBehaviour
 			{
 				fireteamBlackboard.Write(Blackboard.Keys.NeedRepair, this, Time.time + 1);
 			}
+
+			if (currentState == State.Fight && shooter.Target != null)
+			{
+				fireteamBlackboard.Write(Blackboard.Keys.Attacking, shooter.Target, Time.time + 1);
+			}
+			else if (currentState == State.Flee)
+			{
+				fireteamBlackboard.Write(Blackboard.Keys.Fleeing, this, Time.time + 1);
+			}
 		}
 	}
 
@@ -85,6 +100,12 @@ public class Vehicle : MonoBehaviour
 			return false;
 		}
 
+		if (currentOrder != null && currentOrder.IsImperative)
+		{
+			currentState = State.FollowOrders;
+			return oldState != currentState;
+		}
+
 		if (closestEnemy != null &&
 		 Vector3.Distance(closestEnemy.position, transform.position) < FleeDistance &&
 		 health.Percent < FleeHealthPercent)
@@ -93,7 +114,7 @@ public class Vehicle : MonoBehaviour
 			return true;
 		}
 
-		if (Vector3.Distance(transform.position, Fireteam.AveragePosition()) < MaxDistanceFromLeader)
+		if (Vector3.Distance(transform.position, Fireteam.transform.position) < MaxDistanceFromLeader)
 		{
 			if (shooter.Target != null &&
 				Vector3.Distance(transform.position, shooter.Target.position) < AutoAttackRange)
@@ -180,7 +201,7 @@ public class Vehicle : MonoBehaviour
 			return;
 		}
 
-		var middlePos = Fireteam.AveragePosition();
+		var middlePos = Fireteam.transform.position;
 
 		var angleBetween = Mathf.PI * 2 / Fireteam.Members.Length;
 		var i = Fireteam.GetIndex(this);
@@ -237,8 +258,8 @@ public class Vehicle : MonoBehaviour
 				break;
 
 			case VehicleOrderType.Move:
-				Move(order.Target, order.TargetPosition);
-				Attack(null);
+				Move(order.Target, order.TargetPosition, withTeam: !order.IsImperative);
+				Attack(null, attackOnSight: !order.IsImperative);
 				break;
 
 			default:
@@ -319,12 +340,25 @@ public class Vehicle : MonoBehaviour
 		}
 	}
 
+	public void OnDestroy()
+	{
+		if (Fireteam !=null)
+		{
+			var fireteamBlackboard = Fireteam.GetComponent<Blackboard>();
+
+			if (fireteamBlackboard !=null)
+			{
+				fireteamBlackboard.Write(Blackboard.Keys.AllyDown, name, Time.time + 600);
+			}
+		}
+	}
+
 	public void OnDrawGizmos()
 	{
 		if (Fireteam != null)
 		{
 			Gizmos.color = Color.yellow;
-			Gizmos.DrawLine(transform.position, Fireteam.AveragePosition());
+			Gizmos.DrawLine(transform.position, Fireteam.transform.position);
 		}
 	}
 

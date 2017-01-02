@@ -47,7 +47,7 @@ public class MouseController : MonoBehaviour
 					{
 						Type = FireteamOrderType.Defend,
 						TargetPosition = point,
-						IsDone = () => Vector3.Distance(Fireteam.AveragePosition(), point) < 10f
+						IsDone = () => Vector3.Distance(Fireteam.transform.position, point) < 10f
 					});
 				}
 			}
