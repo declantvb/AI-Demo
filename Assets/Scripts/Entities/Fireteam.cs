@@ -243,7 +243,7 @@ public class Fireteam : MonoBehaviour, IGoap
 				{
 					Type = orderType,
 					Target = nextAction.target,
-					IsDone = x => nextAction.target != null && Vector3.Distance(x.transform.position, nextAction.target.position) < MaxScoutDistance,
+					IsDone = x => nextAction.target == null || Vector3.Distance(x.transform.position, nextAction.target.position) < MaxScoutDistance,
 					IsImperative = imperative
 				};
 			}

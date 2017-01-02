@@ -188,7 +188,7 @@ public class Vehicle : MonoBehaviour
 		{
 			// only chanse fleeing enemy so far
 
-			Move(closestEnemy, withTeam: false, range: shooter.Range);
+			Move(closestEnemy, asTeam: false, range: shooter.Range);
 			Attack(closestEnemy);
 		}
 	}
@@ -247,18 +247,18 @@ public class Vehicle : MonoBehaviour
 			case VehicleOrderType.Attack:
 				if (order.Target != null)
 				{
-					Move(order.Target, range: shooter.Range);
+					Move(order.Target, asTeam: false, range: shooter.Range);
 					Attack(order.Target);
 				}
 				else
 				{
-					Move(null, order.TargetPosition, range: shooter.Range);
+					Move(null, order.TargetPosition, asTeam: false, range: shooter.Range);
 					Attack(null, order.TargetPosition);
 				}
 				break;
 
 			case VehicleOrderType.Move:
-				Move(order.Target, order.TargetPosition, withTeam: !order.IsImperative);
+				Move(order.Target, order.TargetPosition, asTeam: !order.IsImperative);
 				Attack(null, attackOnSight: !order.IsImperative);
 				break;
 
@@ -294,13 +294,13 @@ public class Vehicle : MonoBehaviour
 		shooter.AttackOnSight = attackOnSight;
 	}
 
-	private void Move(Transform target, Vector3? targetPos = null, bool withTeam = true, float range = 0f, bool slowMove = false)
+	private void Move(Transform target, Vector3? targetPos = null, bool asTeam = true, float range = 0f, bool slowMove = false)
 	{
 		mover.Reset();
 		mover.MoveType = slowMove ? MoveType.SlowMove : MoveType.Move;
 
 		var isLeader = Fireteam.GetLeader() == this;
-		if (isLeader || !withTeam)
+		if (isLeader || !asTeam)
 		{
 			if (target != null)
 			{
@@ -317,7 +317,7 @@ public class Vehicle : MonoBehaviour
 
 			mover.OrderTargetRange = range;
 
-			if (isLeader)
+			if (isLeader && asTeam)
 			{
 				var formation = Fireteam.Formation;
 				mover.FormationCorrection = () =>
